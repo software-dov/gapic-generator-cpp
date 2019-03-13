@@ -15,7 +15,59 @@
 #include "benchmark/benchmark.h"
 #include "gax/molluscs.pb.h"
 
+#include <vector>
+
+using namespace molluscs;
+
+Whelk consumeByConstRef(Whelk const& w) {
+  Whelk copy(w);
+  return copy;
+}
+
+Whelk consumeByValue(Whelk w) {
+  Whelk copy(std::move(w));
+  return copy;
+}
+
+Whelk consumeByRvalueRef(Whelk&& w) {
+  Whelk copy(std::move(w));
+  return copy;
+}
+
 static void WhelkConstRef(benchmark::State& state) {
+  Whelk w;
+  w.set_name("Steve");
+  w.set_id(6);
+  for(auto _ : state ){
+    consumeByConstRef(w);
+  }
+}
+
+static Whelk whelks[12427675];
+
+static void WhelkRvalueRef(benchmark::State& state) {
+  auto whelk_ptr = &(whelks[0]);
+
+  for(auto& it : whelks) {
+    it.set_name("Steve");
+    it.set_id(6);
+  }
+
+  for(auto _ : state ){
+    consumeByRvalueRef(std::move(*whelk_ptr));
+    whelk_ptr++;
+  }
+}
+
+static void WhelkValue(benchmark::State& state) {
+  Whelk w;
+  w.set_name("Steve");
+  w.set_id(6);
+  for(auto _ : state ){
+    consumeByValue(w);
+  }
 }
 
 BENCHMARK(WhelkConstRef);
+BENCHMARK(WhelkRvalueRef);
+BENCHMARK(WhelkValue);
