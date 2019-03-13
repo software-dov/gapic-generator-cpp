@@ -38,6 +38,28 @@ gax_unit_tests = [
     "status_unittest.cc",
 ]
 
+proto_library(
+    name = "molluscs_proto",
+    srcs = ["molluscs.proto"],
+)
+
+cc_proto_library(
+    name = "molluscs_cc_proto",
+    deps = [":molluscs_proto"],
+)
+
+cc_binary(
+    name = "mollusc_benchmark",
+    srcs = ["molluscs_benchmark.cc"],
+    deps = [
+        ":molluscs_cc_proto",
+        # "@absl//absl/base",
+        # "@absl//absl/strings",
+        "@benchmark//:benchmark_main",
+        "@com_google_protobuf//:protoc_lib",
+    ],
+)
+
 [cc_test(
     name = "gax_" + test.replace(".cc", ""),
     size = "small",

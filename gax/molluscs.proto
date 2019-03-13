@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package molluscs;
+
+// whelk is small, clam is medium, squid is (potentially) very large
+
+message Whelk {
+  string name = 1;
+  int32 id = 2;  // I am not a number, I am a free man!
+}
+
+message Clam {
+  string name = 1;
+  int32 id = 2;
+  string genus = 3;
+  bool spawned = 4;
+
+  string fluted_description = 5;
+  int32 mass_kg = 6;
+  bool has_pearl = 7;
+  int32 pearl_mass = 8;
+}
+
+message Squid {
+  message Tentacle {
+    int32 length_cm = 1;
+    string club_description = 2;
+    string sucker_description = 3;
+  }
+
+  message Arm {
+    int32 length_cm = 1;
+    string description = 2;
+    bool forked = 3;
+    bool has_hectocotylus = 4;
+  }
+
+  message Chromatophore {
+    int32 translucence = 1;
+    int32 reflectivity = 2;
+    int32 opacity = 3;
+    int32 rbg_val = 4;
+    int32 radius_um = 5;
+  }
+
+  string name = 1;
+  int32 id = 2;
+  string genus = 3;
+  string species = 4;
+  repeated Arm arms = 5;
+  repeated Tentacle tentacles = 6;
+  repeated Chromatophore chromatophores = 7;
+  int32 squid_iq = 8;
+  int32 mass_kg = 9;
+  int32 length_cm = 10;
+  int32 armor_class = 11;
+  int32 to_hit = 12;
+  int32 gold = 13;
+  string size_category = 14;
+  int32 damage_reduction = 15;
+  repeated string treasure = 16;
+  int32 age_months = 17;
+  int32 ipv4_addr = 18;
+  string ocean_zone = 19;
+}
