@@ -9,6 +9,8 @@ message Whelk {
   int32 id = 2;  // I am not a number, I am a free man!
 }
 
+// Todo: make clam a little more medium weight,
+// probably with repeated fields and see what happens.
 message Clam {
   string name = 1;
   int32 id = 2;
@@ -41,7 +43,7 @@ message Squid {
     int32 translucence = 1;
     int32 reflectivity = 2;
     int32 opacity = 3;
-    int32 rbg_val = 4;
+    int32 rgb_val = 4;
     int32 radius_um = 5;
   }
 
@@ -60,8 +62,7 @@ message Squid {
   int32 gold = 13;
   string size_category = 14;
   int32 damage_reduction = 15;
-  repeated string treasure = 16;
-  int32 age_months = 17;
-  int32 ipv4_addr = 18;
-  string ocean_zone = 19;
+  int32 age_months = 16;
+  int32 ipv4_addr = 17;
+  string ocean_zone = 18;
 }

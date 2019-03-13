@@ -42,8 +42,8 @@ static void WhelkConstRef(benchmark::State& state) {
 }
 
 static Whelk whelks[12427675];  // hack to defer construction costs,
-                                // this is more than the number of iterations
-                                // that should usually be run.
+// this is more than the number of iterations
+// that should usually be run.
 
 static void WhelkRvalueRef(benchmark::State& state) {
   auto whelk_ptr = &(whelks[0]);
@@ -106,8 +106,8 @@ static void ClamConstRef(benchmark::State& state) {
 }
 
 static Clam clams[331280];  //  to defer construction costs,
-                            // this is more than the number of iterations
-                            // that should usually be run.
+// this is more than the number of iterations
+// that should usually be run.
 
 static void ClamRvalueRef(benchmark::State& state) {
   auto clam_ptr = &(clams[0]);
@@ -154,3 +154,154 @@ static void ClamValue(benchmark::State& state) {
 BENCHMARK(ClamConstRef);
 BENCHMARK(ClamRvalueRef);
 BENCHMARK(ClamValue);
+
+Squid consumeByConstRef(Squid const& w) {
+  Squid copy(w);
+  return copy;
+}
+
+Squid consumeByValue(Squid w) {
+  Squid copy(std::move(w));
+  return copy;
+}
+
+Squid consumeByRvalueRef(Squid&& w) {
+  Squid copy(std::move(w));
+  return copy;
+}
+
+static void SquidConstRef(benchmark::State& state) {
+  Squid w;
+  w.set_name("Steve");
+  w.set_id(6);
+  w.set_genus("Architeuthis");
+  w.set_species("dux");
+  w.set_squid_iq(250);
+  w.set_mass_kg(500);
+  w.set_length_cm(500);
+  w.set_armor_class(16);
+  w.set_to_hit(10);
+  w.set_gold(200);
+  w.set_size_category("Colossal :P");
+  w.set_damage_reduction(2);
+  w.set_age_months(3);
+  w.set_ipv4_addr(2147483647);
+  w.set_ocean_zone("unknown, but probably somewhere below pelagic");
+  for(int i = 0; i < 8; i++) {
+    auto a = w.add_arms();
+    a->set_length_cm(250);
+    a->set_description("weird");
+    a->set_forked(false);
+    a->set_has_hectocotylus(i==3);
+  }
+  for(int i = 0; i < 2; i++) {
+    auto t = w.add_tentacles();
+    t->set_length_cm(250);
+    t->set_club_description("curled");
+    t->set_sucker_description("weird");
+  }
+  for(int i = 0; i < 10000; i++) {
+    auto c = w.add_chromatophores();
+    c->set_radius_um(2);
+    c->set_rgb_val(i%256);
+  }
+
+  for(auto _ : state ){
+    consumeByConstRef(w);
+  }
+}
+
+static Squid squids[6000];  // hack to defer construction costs,
+// this is more than the number of iterations
+// that should usually be run.
+
+static void SquidRvalueRef(benchmark::State& state) {
+  auto squid_ptr = &(squids[0]);
+
+  for(auto& it : squids) {
+    it.set_name("Steve");
+    it.set_id(6);
+    it.set_genus("Architeuthis");
+    it.set_species("dux");
+    it.set_squid_iq(250);
+    it.set_mass_kg(500);
+    it.set_length_cm(500);
+    it.set_armor_class(16);
+    it.set_to_hit(10);
+    it.set_gold(200);
+    it.set_size_category("Colossal :P");
+    it.set_damage_reduction(2);
+    it.set_age_months(3);
+    it.set_ipv4_addr(2147483647);
+    it.set_ocean_zone("unknown, but probably somewhere below pelagic");
+    for(int i = 0; i < 8; i++) {
+      auto a = it.add_arms();
+      a->set_length_cm(250);
+      a->set_description("weird");
+      a->set_forked(false);
+      a->set_has_hectocotylus(i==3);
+    }
+    for(int i = 0; i < 2; i++) {
+      auto t = it.add_tentacles();
+      t->set_length_cm(250);
+      t->set_club_description("curled");
+      t->set_sucker_description("weird");
+    }
+    for(int i = 0; i < 10000; i++) {
+      auto c = it.add_chromatophores();
+      c->set_radius_um(2);
+      c->set_rgb_val(i%256);
+    }
+
+  }
+
+  for(auto _ : state ){
+    consumeByRvalueRef(std::move(*squid_ptr));
+    squid_ptr++;
+  }
+}
+
+static void SquidValue(benchmark::State& state) {
+  Squid w;
+  w.set_name("Steve");
+  w.set_id(6);
+  w.set_genus("Architeuthis");
+  w.set_species("dux");
+  w.set_squid_iq(250);
+  w.set_mass_kg(500);
+  w.set_length_cm(500);
+  w.set_armor_class(16);
+  w.set_to_hit(10);
+  w.set_gold(200);
+  w.set_size_category("Colossal :P");
+  w.set_damage_reduction(2);
+  w.set_age_months(3);
+  w.set_ipv4_addr(2147483647);
+  w.set_ocean_zone("unknown, but probably somewhere below pelagic");
+  for(int i = 0; i < 8; i++) {
+    auto a = w.add_arms();
+    a->set_length_cm(250);
+    a->set_description("weird");
+    a->set_forked(false);
+    a->set_has_hectocotylus(i==3);
+  }
+  for(int i = 0; i < 2; i++) {
+    auto t = w.add_tentacles();
+    t->set_length_cm(250);
+    t->set_club_description("curled");
+    t->set_sucker_description("weird");
+  }
+  for(int i = 0; i < 10000; i++) {
+    auto c = w.add_chromatophores();
+    c->set_radius_um(2);
+    c->set_rgb_val(i%256);
+  }
+
+  for(auto _ : state ){
+    consumeByValue(w);
+  }
+}
+
+BENCHMARK(SquidConstRef);
+BENCHMARK(SquidRvalueRef);
+BENCHMARK(SquidValue);
