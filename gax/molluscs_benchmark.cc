@@ -15,8 +15,6 @@
 #include "benchmark/benchmark.h"
 #include "gax/molluscs.pb.h"
 
-#include <vector>
-
 using namespace molluscs;
 
 Whelk consumeByConstRef(Whelk const& w) {
@@ -43,7 +41,9 @@ static void WhelkConstRef(benchmark::State& state) {
   }
 }
 
-static Whelk whelks[12427675];
+static Whelk whelks[12427675];  // hack to defer construction costs,
+                                // this is more than the number of iterations
+                                // that should usually be run.
 
 static void WhelkRvalueRef(benchmark::State& state) {
   auto whelk_ptr = &(whelks[0]);
@@ -71,3 +71,86 @@ static void WhelkValue(benchmark::State& state) {
 BENCHMARK(WhelkConstRef);
 BENCHMARK(WhelkRvalueRef);
 BENCHMARK(WhelkValue);
+
+Clam consumeByConstRef(Clam const& w) {
+  Clam copy(w);
+  return copy;
+}
+
+Clam consumeByValue(Clam w) {
+  Clam copy(std::move(w));
+  return copy;
+}
+
+Clam consumeByRvalueRef(Clam&& w) {
+  Clam copy(std::move(w));
+  return copy;
+}
+
+static void ClamConstRef(benchmark::State& state) {
+  Clam w;
+  w.set_name("Steve");
+  w.set_id(6);
+  w.set_genus("Tridacna");
+  w.set_spawned(true);
+  w.set_fluted_description("could be more fluted, could be less fluted");
+  w.set_mass_kg(40);
+  w.set_has_pearl(false);
+  w.set_pearl_mass(0);
+  for(int i = 0; i < 30; ++i) {
+    w.add_spawning_phases("At a quarter moon");
+  }
+  for(auto _ : state ){
+    consumeByConstRef(w);
+  }
+}
+
+static Clam clams[331280];  //  to defer construction costs,
+                            // this is more than the number of iterations
+                            // that should usually be run.
+
+static void ClamRvalueRef(benchmark::State& state) {
+  auto clam_ptr = &(clams[0]);
+
+  for(auto& it : clams) {
+    it.set_name("Steve");
+    it.set_id(6);
+    it.set_genus("Tridacna");
+    it.set_spawned(true);
+    it.set_fluted_description("could be more fluted, could be less fluted");
+    it.set_mass_kg(40);
+    it.set_has_pearl(false);
+    for(int i = 0; i < 30; ++i) {
+      it.add_spawning_phases("At a quarter moon");
+    }
+    it.set_pearl_mass(0);
+  }
+
+  for(auto _ : state ){
+    consumeByRvalueRef(std::move(*clam_ptr));
+    clam_ptr++;
+  }
+}
+
+static void ClamValue(benchmark::State& state) {
+  Clam w;
+  w.set_name("Steve");
+  w.set_id(6);
+  w.set_genus("Tridacna");
+  w.set_spawned(true);
+  w.set_fluted_description("could be more fluted, could be less fluted");
+  w.set_mass_kg(40);
+  w.set_has_pearl(false);
+  w.set_pearl_mass(0);
+  for(int i = 0; i < 30; ++i) {
+    w.add_spawning_phases("At a quarter moon");
+  }
+
+  for(auto _ : state ){
+    consumeByValue(w);
+  }
+}
+
+BENCHMARK(ClamConstRef);
+BENCHMARK(ClamRvalueRef);
+BENCHMARK(ClamValue);

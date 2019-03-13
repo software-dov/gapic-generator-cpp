@@ -19,6 +19,8 @@ message Clam {
   int32 mass_kg = 6;
   bool has_pearl = 7;
   int32 pearl_mass = 8;
+
+  repeated string spawning_phases = 9;
 }
 
 message Squid {
