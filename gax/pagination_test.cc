@@ -18,8 +18,10 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gmock/gmock-matchers.h>
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <iterator>
 #include <sstream>
+#include <string>
 #include <vector>
 
 namespace {
@@ -28,7 +30,7 @@ using namespace ::google;
 
 class OperationsAccessor {
  public:
-  protobuf::RepeatedPtrField<longrunning::Operation>* operator()(
+  inline protobuf::RepeatedPtrField<longrunning::Operation>* operator()(
       longrunning::ListOperationsResponse& lor) const {
     return lor.mutable_operations();
   }
@@ -36,16 +38,25 @@ class OperationsAccessor {
 
 class PageRetriever {
  public:
-  // Start at 1 to count number of pages seen total, including the first.
-  PageRetriever(int max_pages) : i_(1), max_pages_(max_pages) {}
+  PageRetriever(int max_pages, int elts_per_page, int fail_after_page = 0)
+      : i_(1),
+        max_pages_(max_pages),
+        elts_per_page_(elts_per_page),
+        fail_after_page_(fail_after_page) {}
   gax::Status operator()(longrunning::ListOperationsResponse* lor) {
-    if (i_ < max_pages_) {
+    if (i_ <= max_pages_) {
       std::stringstream ss;
       ss << "NextPage" << i_;
       lor->set_next_page_token(ss.str());
+      for (int j = 0; j < elts_per_page_; j++) {
+        std::stringstream elt_name;
+        elt_name << "Element " << i_ << "x" << j;
+        auto op = lor->add_operations();
+        op->set_name(elt_name.str());
+      }
       i_++;
     } else {
-      lor->clear_next_page_token();
+      lor->Clear();
     }
 
     return gax::Status{};
@@ -54,6 +65,8 @@ class PageRetriever {
  private:
   int i_;
   const int max_pages_;
+  const int elts_per_page_;
+  const int fail_after_page_;
 };
 
 using TestPages =
@@ -119,7 +132,7 @@ TEST(Pages, Basic) {
   TestPages terminal(
       // The output param is pristine, which means its next_page_token
       // is empty.
-      PageRetriever(0), 0);
+      PageRetriever(0, 0), 0);
 
   EXPECT_EQ(terminal.begin(), terminal.end());
   EXPECT_EQ(terminal.end()->NextPageToken(), "");
@@ -127,20 +140,31 @@ TEST(Pages, Basic) {
 
 TEST(Pages, Iteration) {
   int i = 1;
-  TestPages pages(PageRetriever(10), 0);
-  for (auto const& p : pages) {
+  TestPages pages(PageRetriever(10, 0), 0);
+  auto iter = pages.begin();
+  for (; iter != pages.end(); ++iter) {
     std::stringstream ss;
     ss << "NextPage" << i;
 
-    EXPECT_EQ(p.NextPageToken(), ss.str());
+    // Sanity check on both access operators
+    EXPECT_EQ(iter->NextPageToken(), ss.str());
+    EXPECT_EQ((*iter).NextPageToken(), ss.str());
     i++;
   }
-  EXPECT_EQ(i, 10);
+  EXPECT_EQ(i, 11);
+  EXPECT_EQ(iter->NextPageToken(), "");
 }
+
+// TEST(Pages, MoveIteration) {
+//   TestPages pages(PageRetriever(10, 0), 0);
+//   std::vector<longrunning::ListOperationsResponse> lor{
+//       std::move_iterator<TestPages::iterator>(pages.begin()),
+//       std::move_iterator<TestPages::iterator>(pages.end())};
+// }
 
 TEST(Pages, PageCap) {
   int i = 1;
-  TestPages pages(PageRetriever(10), 5);
+  TestPages pages(PageRetriever(10, 0), 5);
   auto iter = pages.begin();
   for (; iter != pages.end(); ++iter) {
     std::stringstream ss;
@@ -151,6 +175,131 @@ TEST(Pages, PageCap) {
   }
   EXPECT_EQ(i, 5);
   EXPECT_EQ(iter->NextPageToken(), "NextPage5");
+}
+
+TEST(Pages, MultipleIteration) {
+  TestPages pages(PageRetriever(5, 0), 0);
+  std::vector<std::string> nextTokens1;
+  nextTokens1.reserve(5);
+
+  std::transform(pages.begin(), pages.end(), std::back_inserter(nextTokens1),
+                 [](TestedPageResult const& p) -> std::string {
+                   return p.NextPageToken();
+                 });
+
+  std::vector<std::string> nextTokens2;
+  nextTokens2.reserve(5);
+  std::transform(pages.begin(), pages.end(), std::back_inserter(nextTokens2),
+                 [](TestedPageResult const& p) -> std::string {
+                   return p.NextPageToken();
+                 });
+
+  EXPECT_EQ(nextTokens1, nextTokens2);
+}
+
+using TestPaginatedResult =
+    gax::PaginatedResult<longrunning::Operation,
+                         longrunning::ListOperationsResponse,
+                         OperationsAccessor, PageRetriever>;
+
+std::vector<std::string> make_expected_names(int pages, int elts) {
+  std::vector<std::string> expected_names;
+  expected_names.reserve(pages * elts);
+  for (int i = 1; i < pages + 1; i++) {
+    for (int j = 0; j < elts; j++) {
+      std::stringstream elt_name;
+      elt_name << "Element " << i << "x" << j;
+      expected_names.push_back(elt_name.str());
+    }
+  }
+  return expected_names;
+}
+
+TEST(PaginatedResult, BasicIteration) {
+  std::vector<std::string> expected_names = make_expected_names(5, 5);
+
+  std::vector<std::string> names;
+  names.reserve(expected_names.size());
+  TestPaginatedResult paginated_result(PageRetriever(5, 5), 0);
+  for (auto& e : paginated_result) {
+    names.push_back(e.name());
+  }
+  EXPECT_EQ(expected_names, names);
+}
+
+// TEST(PaginatedResult, MoveIteration) {
+//   TestPaginatedResult paginated_result(PageRetriever(5, 5), 0);
+//   std::vector<longrunning::Operation> ops{
+//       std::move_iterator<TestPaginatedResult::iterator>(
+//           paginated_result.begin()),
+//       std::move_iterator<TestPaginatedResult::iterator>(paginated_result.end()),
+//   };
+// }
+
+TEST(PaginatedResult, CappedIteration) {
+  std::vector<std::string> expected_names = make_expected_names(3, 5);
+  std::vector<std::string> names;
+  names.reserve(expected_names.size());
+  TestPaginatedResult paginated_result(PageRetriever(5, 5), 4);
+  std::transform(paginated_result.begin(), paginated_result.end(),
+                 std::back_inserter(names),
+                 [](longrunning::Operation const& op) -> std::string {
+                   return op.name();
+                 });
+  EXPECT_EQ(expected_names, names);
+}
+
+TEST(PaginatedResult, Pages) {
+  std::vector<std::string> expected_names = make_expected_names(5, 5);
+
+  std::vector<std::string> names;
+  names.reserve(expected_names.size());
+  TestPaginatedResult paginated_result(PageRetriever(5, 5), 0);
+  for (auto& p : paginated_result.pages()) {
+    for (auto& e : p) {
+      names.push_back(e.name());
+    }
+  }
+
+  EXPECT_EQ(expected_names, names);
+}
+
+TEST(PaginatedResult, CappedPages) {
+  std::vector<std::string> expected_names = make_expected_names(3, 5);
+
+  std::vector<std::string> names;
+  names.reserve(expected_names.size());
+  TestPaginatedResult paginated_result(PageRetriever(10, 5), 4);
+  for (auto& p : paginated_result.pages()) {
+    for (auto& e : p) {
+      names.push_back(e.name());
+    }
+  }
+
+  EXPECT_EQ(expected_names, names);
+}
+
+TEST(PaginatedResult, MultipleIteration) {
+  TestPaginatedResult paginated_result(PageRetriever(5, 5), 0);
+
+  std::vector<std::string> names1;
+  names1.reserve(25);
+  std::transform(paginated_result.begin(), paginated_result.end(),
+                 std::back_inserter(names1),
+                 [](longrunning::Operation const& op) -> std::string {
+                   return op.name();
+                 });
+
+  std::vector<std::string> names2;
+  names2.reserve(names1.size());
+
+  std::transform(paginated_result.begin(), paginated_result.end(),
+                 std::back_inserter(names2),
+                 [](longrunning::Operation const& op) -> std::string {
+                   return op.name();
+                 });
+
+  EXPECT_EQ(names1, names2);
 }
 
 }  // namespace

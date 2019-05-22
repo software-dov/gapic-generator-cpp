@@ -77,8 +77,8 @@ class Pages {
     iterator end() { return ElementAccessor{}(raw_page_)->end(); }
 
     // Const overloads
-    iterator begin() const { return ElementAccessor{}(raw_page_)->cbegin(); }
-    iterator end() const { return ElementAccessor{}(raw_page_)->cend(); }
+    // iterator begin() const { return ElementAccessor{}(raw_page_)->cbegin(); }
+    // iterator end() const { return ElementAccessor{}(raw_page_)->cend(); }
 
     std::string NextPageToken() const { return raw_page_.next_page_token(); }
     PageType const& RawPage() const { return raw_page_; }
@@ -96,12 +96,14 @@ class Pages {
     using pointer = PageResult*;
     using reference = PageResult&;
 
-    PageResult const& operator*() const { return page_result_; }
-    PageResult const* operator->() const { return &page_result_; }
+    PageResult& operator*() { return page_result_; }
+    PageResult* operator->() { return &page_result_; }
     iterator& operator++() {
       // Note: if the rpc fails, the page will be untouched,
-      // i.e. will be have an empty page token and element collection.
+      // i.e. will have an empty page token and element collection.
       // This invalidates any iterators on the PageResult.
+      // Note: this makes it impossible to determine what the next_page_token
+      // should be if iteration was terminated early due to an error status.
       page_result_.raw_page_.Clear();
       get_next_page_(&page_result_.raw_page_);
       num_pages_++;
@@ -155,6 +157,69 @@ class Pages {
   // which means that begin() _really_ starts at the beginning.
   NextPageRetriever get_next_page_;
   const int cap_;
+};
+
+template <
+    typename ElementType, typename PageType, typename ElementAccessor,
+    typename NextPageRetriever,
+    typename std::enable_if<
+        std::is_default_constructible<ElementAccessor>::value, int>::type = 0,
+    typename std::enable_if<
+        gax::internal::is_invocable<NextPageRetriever, PageType*>::value,
+        int>::type = 0>
+class PaginatedResult {
+ public:
+  PaginatedResult(NextPageRetriever get_next_page, int cap)
+      : pages_(std::move(get_next_page), cap) {}
+
+  class iterator {
+   public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = ElementType;
+    using difference_type = std::ptrdiff_t;
+    using pointer = ElementType*;
+    using reference = ElementType&;
+
+    ElementType& operator*() { return *elt_iter_; }
+    ElementType* operator->() { return &(*elt_iter_); }
+    iterator& operator++() {
+      ++elt_iter_;
+
+      if (elt_iter_ == pages_iter_->end()) {
+        ++pages_iter_;
+        elt_iter_ = pages_iter_->begin();
+      }
+
+      return *this;
+    }
+
+    bool operator==(iterator const& rhs) const {
+      return pages_iter_ == rhs.pages_iter_;
+    }
+    bool operator!=(iterator const& rhs) const { return !(*this == rhs); }
+
+   private:
+    friend PaginatedResult;
+    iterator(typename Pages<ElementType, PageType, ElementAccessor,
+                            NextPageRetriever>::iterator&& pages_iter)
+        : pages_iter_(std::move(pages_iter)), elt_iter_(pages_iter_->begin()) {}
+
+    typename Pages<ElementType, PageType, ElementAccessor,
+                   NextPageRetriever>::iterator pages_iter_;
+    typename Pages<ElementType, PageType, ElementAccessor,
+                   NextPageRetriever>::PageResult::iterator elt_iter_;
+  };
+
+  iterator begin() { return iterator(pages_.begin()); }
+  iterator end() { return iterator(pages_.end()); }
+
+  Pages<ElementType, PageType, ElementAccessor, NextPageRetriever> pages()
+      const {
+    return pages_;
+  }
+
+ private:
+  Pages<ElementType, PageType, ElementAccessor, NextPageRetriever> pages_;
 };
 
 }  // namespace gax
